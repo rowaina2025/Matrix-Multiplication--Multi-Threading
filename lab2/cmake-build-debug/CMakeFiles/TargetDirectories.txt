@@ -1,0 +1,3 @@
+/home/rowiana/CSED/OS/Labs/lab2/cmake-build-debug/CMakeFiles/lab2.dir
+/home/rowiana/CSED/OS/Labs/lab2/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/rowiana/CSED/OS/Labs/lab2/cmake-build-debug/CMakeFiles/rebuild_cache.dir
