@@ -2,16 +2,14 @@
 #include <string.h>
 #include <sys/time.h>
 #include <pthread.h>
-#include <unistd.h>
 #include <stdlib.h>
 
 #define MAX_SIZE 20
 
 // Dimensions of a and b matrices and c matrix
 int row1, row2, col1, col2, MatA[MAX_SIZE][MAX_SIZE], MatB[MAX_SIZE][MAX_SIZE], MatOut[MAX_SIZE][MAX_SIZE];
-FILE *fa, *fb, *fOut, *fOutRow, *fOutElement;
 struct timeval stop, start;
-const char file_names[5][25] = {"x", "y", "z_per_matrix", "z_per_row", "z_per_element"};
+char *Mat1_file = "a", *Mat2_file = "b", *MatOut_prefix = "c";
 
 struct indexes {
     int i;
@@ -25,15 +23,15 @@ int thread_per_matrix();
 int thread_per_row();
 int thread_per_element();
 void reset_mat_out();
-int  check_dimentions();
-void take_mat(FILE **file, const char *filename, int mat[MAX_SIZE][MAX_SIZE], int *row, int *col);
-void write_mat_to_file(int mat[MAX_SIZE][MAX_SIZE], FILE **file, const char *filename, int row, int col);
-int file_exists(FILE **file);
+void write_mat_to_file(int mat[MAX_SIZE][MAX_SIZE], char *method, int row, int col);
+void read_from_file(char file[50], int *row, int *col, int mat[MAX_SIZE][MAX_SIZE]);
+void name_file(int argc, char* argv[]);
 
-int main() {
-    take_mat(&fa, file_names[0], MatA, &row1, &col1);
-    take_mat(&fb, file_names[1], MatB, &row2, &col2);
-    if(!check_dimentions()) {
+int main(int argc, char* argv[]) {
+    name_file(argc, argv);
+    read_from_file(Mat1_file, &row1, &col1, MatA);
+    read_from_file(Mat2_file, &row2, &col2, MatB);
+    if(row2 != col1) {
         perror("Invalid dimensions");
         exit(1);
     }
@@ -42,51 +40,89 @@ int main() {
     per_element_body();
 }
 
-void per_matrix_body() {
-    fOut = fopen(file_names[2], "a");
-    if(!file_exists(&fOut)) exit(1);
-    fprintf(fOut, "Method: A thread per Matrix\nrow=%d col=%d\n", row1, col2);
-    fclose(fOut);
+void name_file(int argc, char* argv[]) {
+    // Use default filenames if no arguments provided
+    if(argc == 1 && argv[0] != NULL) {
+        Mat1_file = "a";
+        Mat2_file = "b";
+        MatOut_prefix = "c";
+    }
+    if(argc > 1) {
+        Mat1_file = argv[1];
+    }
+    if(argc > 2) {
+        Mat2_file = argv[2];
+    }
+    if(argc > 3) {
+        MatOut_prefix = argv[3];
+    }
+}
 
+void reset_mat_out() {
+    for(int i = 0; i < MAX_SIZE; i++) {
+        for(int j = 0; j < MAX_SIZE; j++) {
+            MatOut[i][j] = 0;
+        }
+    }
+}
+
+void read_from_file(char file[50], int *row, int *col, int matrix[MAX_SIZE][MAX_SIZE]) {
+    FILE *fp = fopen(file, "r");
+    fscanf(fp, "row=%d col=%d", row, col);
+    for(int i = 0; i < *row; i++)
+        for(int j = 0; j < *col; j++)
+            fscanf(fp, "%d", &matrix[i][j]);
+    fclose(fp);
+}
+
+void write_mat_to_file(int mat[MAX_SIZE][MAX_SIZE], char *method, int row, int col) {
+    char filename[MAX_SIZE];
+    sprintf(filename, "%s_per_%s.txt", MatOut_prefix, method);
+    // Take matrix entries and write them into the file
+    FILE *out = fopen(filename, "w");
+    fprintf(out, "Method: A thread per %s.\nrow=%d col=%d\n", method, row, col);
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < col; j++) {
+            fprintf(out, "%d ", mat[i][j]);
+        }
+        fprintf(out, "\n");
+    }
+    fclose(out);
+}
+
+void per_matrix_body() {
     gettimeofday(&start, NULL); //start checking time
     int no_threads = thread_per_matrix();
-    printf("Number of threads Thread Per MATRIX Method: %d\n", no_threads);
     gettimeofday(&stop, NULL); //end checking time
+
+    printf("Number of threads Thread Per MATRIX Method: %d\n", no_threads);
     printf("Microseconds taken Per MATRIX: %lu\n\n", stop.tv_usec - start.tv_usec);
 
-    write_mat_to_file(MatOut, &fOut, file_names[2], row1, col2);
+    write_mat_to_file(MatOut, "matrix", row1, col2);
     reset_mat_out();
 }
 
 void per_row_body() {
-    fOutRow = fopen(file_names[3], "a");
-    if(!file_exists(&fOutRow)) exit(1);
-    fprintf(fOutRow, "Method: A thread per row\nrow=%d col=%d\n", row1, col2);
-    fclose(fOutRow);
-
     gettimeofday(&start, NULL); //start checking time
     int no_threads = thread_per_row();
-    printf("Number of threads Thread Per ROW Method: %d\n", no_threads);
     gettimeofday(&stop, NULL); //end checking time
+
+    printf("Number of threads Thread Per ROW Method: %d\n", no_threads);
     printf("Microseconds taken Per ROW: %lu\n\n", stop.tv_usec - start.tv_usec);
 
-    write_mat_to_file(MatOut, &fOutRow, file_names[3], row1, col2);
+    write_mat_to_file(MatOut, "row", row1, col2);
     reset_mat_out();
 }
 
 void per_element_body() {
-    fOutElement = fopen(file_names[4], "a");
-    if(!file_exists(&fOutElement)) exit(1);
-    fprintf(fOutElement, "Method: A thread per element\nrow=%d col=%d\n", row1, col2);
-    fclose(fOutElement);
-
     gettimeofday(&start, NULL); //start checking time
     int no_threads = thread_per_element();
-    printf("Number of threads Thread Per ELEMENT Method: %d\n", no_threads);
     gettimeofday(&stop, NULL); //end checking time
+
+    printf("Number of threads Thread Per ELEMENT Method: %d\n", no_threads);
     printf("Microseconds taken Per Element: %lu\n", stop.tv_usec - start.tv_usec);
 
-    write_mat_to_file(MatOut, &fOutElement, file_names[4], row1, col2);
+    write_mat_to_file(MatOut, "element", row1, col2);
     reset_mat_out();
 }
 
@@ -98,15 +134,13 @@ int thread_per_matrix() {
             for (int k = 0; k < col1; k++) {
                 MatOut[i][j] += MatA[i][k] * MatB[k][j];
             }
-            fprintf(fOut, "%d ", MatOut[i][j]);
         }
-        fprintf(fOut, "\n");
     }
     return  1;
 }
 
 void *thread_per_row_routine(void *ind){
-    int i = *(int *)ind;
+    int i = (int)ind;
     for(int j = 0; j < col2; j++) {
         MatOut[i][j] = 0;
         for(int k = 0; k < col1; k++) {
@@ -120,8 +154,7 @@ int thread_per_row() {
     int indexes[MAX_SIZE];
     for(int i = 0; i < row1; i++) {
         // Different address is sent for each thread avoiding race condition
-        indexes[i] = i;
-        pthread_create(&thread[i], NULL, &thread_per_row_routine, &indexes[i]);
+        pthread_create(&thread[i], NULL, thread_per_row_routine, (void *)i);
     }
 
     for(int i = 0; i < row1; i++) {
@@ -131,27 +164,22 @@ int thread_per_row() {
 }
 
 void *thread_per_element_routine(void *index) {
-    struct indexes *inds;
-    inds = (struct indexes *) index;
-    int i = inds->i;
-    int j = inds->j;
+    struct indexes *inds = (struct indexes *) index;
+    int i = inds->i, j = inds->j;
     MatOut[i][j] = 0;
     for(int k = 0; k < col1; k++) {
         MatOut[i][j] += MatA[i][k] * MatB[k][j];
     }
+    free(inds);
 }
 
 int thread_per_element() {
     pthread_t thread[MAX_SIZE][MAX_SIZE];
-    struct indexes idx[MAX_SIZE][MAX_SIZE];
     for(int i = 0; i < row1; i++) {
         for(int j = 0; j < col2; j++) {
-            struct indexes inds;
-            inds.i = i;
-            inds.j = j;
-            // Different address is sent for each thread avoiding race condition
-            idx[i][j] = inds;
-            pthread_create(&thread[i][j], NULL, &thread_per_element_routine, &idx[i][j]);
+            struct indexes *inds = malloc(sizeof(struct indexes));
+            inds->i = i, inds->j = j;
+            pthread_create(&thread[i][j], NULL, thread_per_element_routine, (void *)inds);
         }
     }
 
@@ -161,64 +189,4 @@ int thread_per_element() {
         }
     }
     return  row1 * col2;
-}
-
-void take_mat(FILE **file, const char *filename, int mat[MAX_SIZE][MAX_SIZE], int *row, int *col) {
-    char input[100], _temp[100];
-    fgets(_temp, 100, stdin);
-    strcpy(input, _temp);
-
-    // input "m=m1 n=n1"
-    if (sscanf(_temp, "row=%d col=%d", row, col) != 2) {
-        fprintf(stderr, "Invalid input format.\n");
-        return;
-    }
-
-    // Open the file
-    *file = fopen(filename, "a");
-    if(!file_exists(file)) exit(1);
-    fprintf(*file, "%s", input);
-    fclose(*file);
-
-    for(int i = 0; i < *row; i++) {
-        for(int j = 0; j < *col; j++) {
-            scanf("%d", &mat[i][j]);
-        }
-    }
-    char c = getchar();
-    write_mat_to_file(mat, file, filename, *row, *col);
-}
-
-void reset_mat_out() {
-    for(int i = 0; i < MAX_SIZE; i++) {
-        for(int j = 0; j < MAX_SIZE; j++) {
-            MatOut[i][j] = 0;
-        }
-    }
-}
-
-int check_dimentions() {
-    if(col1 != row2) return 0;
-    else return 1;
-}
-
-int file_exists(FILE **file) {
-    if(file == NULL) {
-        perror("Error open file");
-        return 0;
-    } else {
-        return  1;
-    }
-}
-
-void write_mat_to_file(int mat[MAX_SIZE][MAX_SIZE], FILE **file, const char *filename, int row, int col) {
-    *file = fopen(filename, "a");
-    // Take matrix entries and write them into the file
-    for (int i = 0; i < row; i++) {
-        for (int j = 0; j < col; j++) {
-            fprintf(*file, "%d ", mat[i][j]);
-        }
-        fprintf(*file, "\n");
-    }
-    fclose(*file);
 }
